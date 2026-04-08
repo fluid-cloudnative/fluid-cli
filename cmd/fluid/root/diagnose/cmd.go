@@ -15,10 +15,16 @@
 package diagnose
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
+	diagpkg "github.com/fluid-cloudnative/fluid-cli/pkg/diagnose"
+	fluidscheme "github.com/fluid-cloudnative/fluid-cli/pkg/scheme"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Options holds the options for the diagnose command.
@@ -27,6 +33,7 @@ type Options struct {
 
 	namespace   string
 	datasetName string
+	output      string
 
 	// packaging options
 	archive   bool
@@ -77,11 +84,21 @@ into a tar.gz archive.`,
 			if ns, err := cmd.Flags().GetString("namespace"); err == nil && ns != "" {
 				o.namespace = ns
 			}
+			if o.namespace == "" {
+				ns, _, err := o.configFlags.ToRawKubeConfigLoader().Namespace()
+				if err == nil {
+					o.namespace = ns
+				}
+			}
+			if o.namespace == "" {
+				o.namespace = "default"
+			}
 			return o.run(cmd)
 		},
 	}
 
 	// packaging
+	cmd.Flags().StringVarP(&o.output, "output", "o", "dir", "Output mode: dir|stdout")
 	cmd.Flags().BoolVar(&o.archive, "archive", false, "Package artifacts into a tar.gz archive")
 	cmd.Flags().StringVar(&o.outputDir, "output-dir", "", "Directory to write artifacts (default: fluid-diagnose-<dataset>-<timestamp>)")
 
@@ -98,10 +115,56 @@ into a tar.gz archive.`,
 }
 
 func (o *Options) run(cmd *cobra.Command) error {
-	// Phase 0 placeholder — full implementation in Phase 2.
-	fmt.Fprintf(cmd.OutOrStdout(), "diagnose: Dataset=%q Namespace=%q (not yet implemented — Phase 2)\n",
-		o.datasetName, o.namespace)
-	fmt.Fprintf(cmd.OutOrStdout(), "  flags: archive=%v output-dir=%q no-logs=%v since=%q\n",
-		o.archive, o.outputDir, o.noLogs, o.since)
+	restConfig, err := o.configFlags.ToRESTConfig()
+	if err != nil {
+		return fmt.Errorf("building REST config: %w", err)
+	}
+
+	c, err := client.New(restConfig, client.Options{Scheme: fluidscheme.Scheme})
+	if err != nil {
+		return fmt.Errorf("creating Kubernetes client: %w", err)
+	}
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("creating Kubernetes typed client: %w", err)
+	}
+
+	runner := diagpkg.NewRunner(c, kubeClient)
+	result, err := runner.Run(context.Background(), diagpkg.Options{
+		DatasetName:           o.datasetName,
+		Namespace:             o.namespace,
+		Output:                o.output,
+		Archive:               o.archive,
+		OutputDir:             o.outputDir,
+		NoLogs:                o.noLogs,
+		IncludeControllerLogs: o.includeControllerLogs,
+		Since:                 o.since,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "no kind is registered") ||
+			strings.Contains(err.Error(), "no matches for kind") ||
+			strings.Contains(err.Error(), "no matches for") ||
+			strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
+			return fmt.Errorf("Fluid CRDs are not installed on this cluster (data.fluid.io/v1alpha1 not found).\n"+
+				"Install Fluid first: https://github.com/fluid-cloudnative/fluid/blob/master/docs/en/userguide/install.md\n"+
+				"Original error: %w", err)
+		}
+		return err
+	}
+
+	if result.Stdout != "" {
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), result.Stdout)
+	}
+	if o.output == "stdout" {
+		return nil
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "diagnose: collected artifacts at %s\n", result.OutputPath)
+	if result.ArchivePath != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "diagnose: archive written to %s\n", result.ArchivePath)
+	}
+	if result.PartialFailureCount > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "diagnose: completed with %d partial collection issues (see summary.txt/manifest.json)\n", result.PartialFailureCount)
+	}
 	return nil
 }
