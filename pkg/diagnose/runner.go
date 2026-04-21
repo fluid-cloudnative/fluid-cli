@@ -210,8 +210,13 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 	m.Failures = failures
 
-	manifestBytes, _ := json.MarshalIndent(m, "", "  ")
-	_ = os.WriteFile(filepath.Join(baseDir, "manifest.json"), manifestBytes, 0o644)
+	manifestBytes, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshaling manifest: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(baseDir, "manifest.json"), manifestBytes, 0o644); err != nil {
+		return nil, fmt.Errorf("writing manifest: %w", err)
+	}
 
 	result := &Result{
 		OutputPath:          baseDir,
