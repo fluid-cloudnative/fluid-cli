@@ -304,6 +304,21 @@ func TestPrintYAML_IsValidYAML(t *testing.T) {
 	}
 }
 
+func TestPrint_InvalidFormatReturnsError(t *testing.T) {
+	report := buildTestReport()
+	var buf bytes.Buffer
+
+	err := Print(&buf, report, "jsno", false)
+	if err == nil {
+		t.Fatal("expected error for unsupported format, got nil")
+	}
+
+	const want = `unsupported output format "jsno" (supported: table, json, yaml)`
+	if err.Error() != want {
+		t.Fatalf("unexpected error message:\nwant: %q\ngot:  %q", want, err.Error())
+	}
+}
+
 func TestPrintTable_SectionOrder(t *testing.T) {
 	report := buildTestReport()
 	var buf bytes.Buffer

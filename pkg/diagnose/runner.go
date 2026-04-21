@@ -191,8 +191,16 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	// Ensure canonical PV/PVC candidates are attempted even when not discovered.
-	r.collectPVC(ctx, baseDir, opts.Namespace, opts.DatasetName, m)
-	r.collectPV(ctx, baseDir, fmt.Sprintf("%s-%s", opts.Namespace, opts.DatasetName), m)
+	canonicalPVCKey := opts.Namespace + "/" + opts.DatasetName
+	if _, ok := seenPVCs[canonicalPVCKey]; !ok {
+		seenPVCs[canonicalPVCKey] = struct{}{}
+		r.collectPVC(ctx, baseDir, opts.Namespace, opts.DatasetName, m)
+	}
+	canonicalPVName := fmt.Sprintf("%s-%s", opts.Namespace, opts.DatasetName)
+	if _, ok := seenPVs[canonicalPVName]; !ok {
+		seenPVs[canonicalPVName] = struct{}{}
+		r.collectPV(ctx, baseDir, canonicalPVName, m)
+	}
 
 	r.collectEvents(ctx, baseDir, opts, m)
 	if opts.IncludeControllerLogs && !opts.NoLogs {
@@ -341,16 +349,17 @@ func (r *Runner) runStdout(ctx context.Context, opts Options) (*Result, error) {
 }
 
 func (r *Runner) collectPod(ctx context.Context, baseDir, namespace, name string, opts Options, m *manifest) {
+	podPrefix := fmt.Sprintf("pods/%s/%s", namespace, name)
 	pod := &corev1.Pod{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, pod); err != nil {
-		m.Artifacts = append(m.Artifacts, manifestEntry{Path: "pods/" + name + "/pod.yaml", Status: "failed", Reason: err.Error()})
+		m.Artifacts = append(m.Artifacts, manifestEntry{Path: podPrefix + "/pod.yaml", Status: "failed", Reason: err.Error()})
 		return
 	}
-	r.writeYAML(baseDir, fmt.Sprintf("pods/%s/pod.yaml", name), pod, m)
-	r.writeText(baseDir, fmt.Sprintf("pods/%s/describe.txt", name), describePod(pod), m)
+	r.writeYAML(baseDir, podPrefix+"/pod.yaml", pod, m)
+	r.writeText(baseDir, podPrefix+"/describe.txt", describePod(pod), m)
 
 	if opts.NoLogs {
-		m.Artifacts = append(m.Artifacts, manifestEntry{Path: fmt.Sprintf("pods/%s/logs.txt", name), Status: "skipped", Reason: "--no-logs enabled"})
+		m.Artifacts = append(m.Artifacts, manifestEntry{Path: podPrefix + "/logs.txt", Status: "skipped", Reason: "--no-logs enabled"})
 		return
 	}
 
@@ -375,21 +384,28 @@ func (r *Runner) collectPod(ctx context.Context, baseDir, namespace, name string
 			b.WriteString("log stream error: " + err.Error() + "\n\n")
 			continue
 		}
-		_, _ = io.Copy(&b, stream)
-		_ = stream.Close()
+		copyPodLog(&b, stream)
 		b.WriteString("\n")
 	}
-	r.writeText(baseDir, fmt.Sprintf("pods/%s/logs.txt", name), b.String(), m)
+	r.writeText(baseDir, podPrefix+"/logs.txt", b.String(), m)
+}
+
+func copyPodLog(b *strings.Builder, stream io.ReadCloser) {
+	if _, err := io.Copy(b, stream); err != nil {
+		b.WriteString(fmt.Sprintf("log copy error: %v\n", err))
+	}
+	_ = stream.Close()
 }
 
 func (r *Runner) collectPVC(ctx context.Context, baseDir, namespace, name string, m *manifest) {
+	pvcBase := fmt.Sprintf("storage/pvc-%s-%s", namespace, name)
 	pvc := &corev1.PersistentVolumeClaim{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, pvc); err != nil {
-		m.Artifacts = append(m.Artifacts, manifestEntry{Path: fmt.Sprintf("storage/pvc-%s.yaml", name), Status: "failed", Reason: err.Error()})
+		m.Artifacts = append(m.Artifacts, manifestEntry{Path: pvcBase + ".yaml", Status: "failed", Reason: err.Error()})
 		return
 	}
-	r.writeYAML(baseDir, fmt.Sprintf("storage/pvc-%s.yaml", name), pvc, m)
-	r.writeText(baseDir, fmt.Sprintf("storage/pvc-%s.describe.txt", name), describePVC(pvc), m)
+	r.writeYAML(baseDir, pvcBase+".yaml", pvc, m)
+	r.writeText(baseDir, pvcBase+".describe.txt", describePVC(pvc), m)
 }
 
 func (r *Runner) collectPV(ctx context.Context, baseDir, name string, m *manifest) {
@@ -416,7 +432,8 @@ func (r *Runner) collectEvents(ctx context.Context, baseDir string, opts Options
 		}
 	}
 	for _, ev := range evList.Items {
-		if !sinceCutoff.IsZero() && ev.LastTimestamp.Time.Before(sinceCutoff) && ev.EventTime.Time.Before(sinceCutoff) {
+		eventTs := eventTimestamp(ev)
+		if !sinceCutoff.IsZero() && !eventTs.IsZero() && eventTs.Before(sinceCutoff) {
 			continue
 		}
 		items = append(items, ev)
@@ -425,6 +442,16 @@ func (r *Runner) collectEvents(ctx context.Context, baseDir string, opts Options
 		return items[i].LastTimestamp.Time.Before(items[j].LastTimestamp.Time)
 	})
 	r.writeYAML(baseDir, "events/events.yaml", map[string]any{"items": items}, m)
+}
+
+func eventTimestamp(ev corev1.Event) time.Time {
+	if !ev.LastTimestamp.Time.IsZero() {
+		return ev.LastTimestamp.Time
+	}
+	if !ev.EventTime.Time.IsZero() {
+		return ev.EventTime.Time
+	}
+	return time.Time{}
 }
 
 func (r *Runner) collectControllerLogs(ctx context.Context, baseDir string, opts Options, m *manifest) {
@@ -436,19 +463,22 @@ func (r *Runner) collectControllerLogs(ctx context.Context, baseDir string, opts
 		return
 	}
 	for _, pod := range pods.Items {
-		req := r.kubeClient.CoreV1().Pods(common.NamespaceFluidSystem).GetLogs(pod.Name, &corev1.PodLogOptions{})
-		stream, err := req.Stream(ctx)
-		if err != nil {
+		if err := func() error {
+			req := r.kubeClient.CoreV1().Pods(common.NamespaceFluidSystem).GetLogs(pod.Name, &corev1.PodLogOptions{})
+			stream, err := req.Stream(ctx)
+			if err != nil {
+				return err
+			}
+			defer stream.Close()
+			b, err := io.ReadAll(stream)
+			if err != nil {
+				return err
+			}
+			r.writeText(baseDir, fmt.Sprintf("controllers/%s.log", pod.Name), string(b), m)
+			return nil
+		}(); err != nil {
 			m.Artifacts = append(m.Artifacts, manifestEntry{Path: fmt.Sprintf("controllers/%s.log", pod.Name), Status: "failed", Reason: err.Error()})
-			continue
 		}
-		defer stream.Close()
-		b, err := io.ReadAll(stream)
-		if err != nil {
-			m.Artifacts = append(m.Artifacts, manifestEntry{Path: fmt.Sprintf("controllers/%s.log", pod.Name), Status: "failed", Reason: err.Error()})
-			continue
-		}
-		r.writeText(baseDir, fmt.Sprintf("controllers/%s.log", pod.Name), string(b), m)
 	}
 }
 
@@ -591,12 +621,14 @@ func tarGzDir(srcDir, outFile string) error {
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
 		}
-		f, err := os.Open(path)
-		if err != nil {
+		return func() error {
+			f, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			_, err = io.Copy(tw, f)
 			return err
-		}
-		defer f.Close()
-		_, err = io.Copy(tw, f)
-		return err
+		}()
 	})
 }

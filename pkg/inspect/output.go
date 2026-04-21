@@ -30,12 +30,14 @@ import (
 // wide enables additional columns (Node, Restarts) in resource tables.
 func Print(w io.Writer, report *DatasetReport, format string, wide bool) error {
 	switch format {
+	case "", "table":
+		return printTable(w, report, wide)
 	case "json":
 		return printJSON(w, report)
 	case "yaml":
 		return printYAML(w, report)
 	default:
-		return printTable(w, report, wide)
+		return fmt.Errorf("unsupported output format %q (supported: table, json, yaml)", format)
 	}
 }
 

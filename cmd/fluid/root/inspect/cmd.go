@@ -114,7 +114,7 @@ func (o *Options) run(cmd *cobra.Command) error {
 		if err := tuicommon.EnsureInteractive(cmd.InOrStdin(), cmd.OutOrStdout(), "inspect dataset selector"); err != nil {
 			return fmt.Errorf("dataset name is required in non-interactive mode: %w", err)
 		}
-		names, err := listDatasetNames(context.Background(), c, o.namespace)
+		names, err := listDatasetNames(cmd.Context(), c, o.namespace)
 		if err != nil {
 			return err
 		}
@@ -130,7 +130,7 @@ func (o *Options) run(cmd *cobra.Command) error {
 	}
 
 	inspector := inspect.New(c)
-	report, err := inspector.Run(context.Background(), o.datasetName, o.namespace)
+	report, err := inspector.Run(cmd.Context(), o.datasetName, o.namespace)
 	if err != nil {
 		// Give a clear hint when Fluid CRDs are not installed on the cluster.
 		if strings.Contains(err.Error(), "no kind is registered") ||

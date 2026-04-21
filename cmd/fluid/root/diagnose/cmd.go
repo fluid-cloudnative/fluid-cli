@@ -15,7 +15,6 @@
 package diagnose
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -153,7 +152,7 @@ func (o *Options) run(cmd *cobra.Command) error {
 		runOpts.Output = "dir"
 	}
 
-	result, err := runner.Run(context.Background(), runOpts)
+	result, err := runner.Run(cmd.Context(), runOpts)
 	if err != nil {
 		if strings.Contains(err.Error(), "no kind is registered") ||
 			strings.Contains(err.Error(), "no matches for kind") ||

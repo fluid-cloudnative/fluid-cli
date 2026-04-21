@@ -22,8 +22,6 @@ import (
 )
 
 // NewRootCmd creates the root command for fluid.
-// The binary is named kubectl-fluid so that kubectl discovers it as
-// the "fluid" plugin and users can invoke it as: fluid <subcommand>
 func NewRootCmd() *cobra.Command {
 	configFlags := genericclioptions.NewConfigFlags(true)
 
@@ -35,7 +33,7 @@ func NewRootCmd() *cobra.Command {
 It provides commands to inspect and diagnose Fluid-managed Datasets and their
 associated Kubernetes resources (Runtimes, Pods, PVCs, PVs, Services, etc.).
 
-Install: copy the binary to a directory in your PATH as 'kubectl-fluid'.
+Install: copy the binary to a directory in your PATH as 'fluid'.
 Usage:   fluid <subcommand>`,
 		Example: `  # List resources owned by a Dataset
   fluid inspect my-dataset -n default

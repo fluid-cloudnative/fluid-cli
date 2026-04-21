@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-BINARY      ?= kubectl-fluid
+BINARY      ?= fluid
 CMD         ?= ./cmd/fluid
 BIN_DIR     ?= bin
 VERSION     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")

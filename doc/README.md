@@ -25,7 +25,7 @@ fluid --help
 
 ```bash
 make build
-cp bin/kubectl-fluid /usr/local/bin/kubectl-fluid
+cp bin/fluid /usr/local/bin/fluid
 ```
 
 kubectl discovers any binary named `kubectl-<name>` in `PATH` and exposes it as `kubectl <name>`.
@@ -54,7 +54,7 @@ Global Flags:
 
 ### inspect
 
-> **Phase 1 — coming soon.**
+> **Phase 1 — available.**
 
 ```bash
 fluid inspect <dataset-name> [-n namespace] [-o table|json|yaml] [--wide]
@@ -65,7 +65,7 @@ owned by a given Fluid Dataset and its Runtime(s).
 
 ### diagnose
 
-> **Phase 2 — coming soon.**
+> **Phase 2 — available.**
 
 ```bash
 fluid diagnose <dataset-name> [-n namespace] [flags]
@@ -94,8 +94,8 @@ fluid version
 | Phase | Focus | Status |
 |-------|-------|--------|
 | 0 | Plugin skeleton, build, install | Done |
-| 1 | `inspect` subcommand | Planned |
-| 2 | `diagnose` subcommand | Planned |
+| 1 | `inspect` subcommand | Done |
+| 2 | `diagnose` subcommand | Done |
 | 3 | AI/LLM-ready diagnostic format | Planned |
 | 4 | Polish, docs, release | Planned |
 
@@ -117,10 +117,4 @@ make build-all
 make fmt vet
 ```
 
-The module uses a local `replace` directive for the Fluid project during development:
-
-```
-replace github.com/fluid-cloudnative/fluid => ../fluid
-```
-
-Ensure the Fluid repository is checked out at `../fluid` relative to this repo.
+The module depends on published Fluid releases in `go.mod`.
