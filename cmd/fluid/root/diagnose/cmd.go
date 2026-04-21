@@ -16,11 +16,16 @@ package diagnose
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	diagpkg "github.com/fluid-cloudnative/fluid-cli/pkg/diagnose"
 	fluidscheme "github.com/fluid-cloudnative/fluid-cli/pkg/scheme"
+	tuicommon "github.com/fluid-cloudnative/fluid-cli/pkg/tui/common"
+	tuidiagnose "github.com/fluid-cloudnative/fluid-cli/pkg/tui/diagnose"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
@@ -98,7 +103,7 @@ into a tar.gz archive.`,
 	}
 
 	// packaging
-	cmd.Flags().StringVarP(&o.output, "output", "o", "dir", "Output mode: dir|stdout")
+	cmd.Flags().StringVarP(&o.output, "output", "o", "tui", "Output mode: tui|dir|stdout")
 	cmd.Flags().BoolVar(&o.archive, "archive", false, "Package artifacts into a tar.gz archive")
 	cmd.Flags().StringVar(&o.outputDir, "output-dir", "", "Directory to write artifacts (default: fluid-diagnose-<dataset>-<timestamp>)")
 
@@ -130,7 +135,11 @@ func (o *Options) run(cmd *cobra.Command) error {
 	}
 
 	runner := diagpkg.NewRunner(c, kubeClient)
-	result, err := runner.Run(context.Background(), diagpkg.Options{
+	if o.output != "tui" && o.output != "dir" && o.output != "stdout" {
+		return fmt.Errorf("invalid output mode %q, expected tui|dir|stdout", o.output)
+	}
+
+	runOpts := diagpkg.Options{
 		DatasetName:           o.datasetName,
 		Namespace:             o.namespace,
 		Output:                o.output,
@@ -139,7 +148,12 @@ func (o *Options) run(cmd *cobra.Command) error {
 		NoLogs:                o.noLogs,
 		IncludeControllerLogs: o.includeControllerLogs,
 		Since:                 o.since,
-	})
+	}
+	if o.output == "tui" {
+		runOpts.Output = "dir"
+	}
+
+	result, err := runner.Run(context.Background(), runOpts)
 	if err != nil {
 		if strings.Contains(err.Error(), "no kind is registered") ||
 			strings.Contains(err.Error(), "no matches for kind") ||
@@ -150,6 +164,17 @@ func (o *Options) run(cmd *cobra.Command) error {
 				"Original error: %w", err)
 		}
 		return err
+	}
+
+	if o.output == "tui" {
+		if err := tuicommon.EnsureInteractive(cmd.InOrStdin(), cmd.OutOrStdout(), "diagnose --output=tui"); err != nil {
+			return err
+		}
+		viewData, err := buildTUIData(o.datasetName, o.namespace, result)
+		if err != nil {
+			return err
+		}
+		return tuidiagnose.Run(cmd.InOrStdin(), cmd.OutOrStdout(), viewData)
 	}
 
 	if result.Stdout != "" {
@@ -167,4 +192,60 @@ func (o *Options) run(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "diagnose: completed with %d partial collection issues (see summary.txt/manifest.json)\n", result.PartialFailureCount)
 	}
 	return nil
+}
+
+type manifest struct {
+	Artifacts []manifestEntry `json:"artifacts"`
+}
+
+type manifestEntry struct {
+	Path   string `json:"path"`
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+}
+
+func buildTUIData(datasetName, namespace string, result *diagpkg.Result) (tuidiagnose.ViewData, error) {
+	summaryPath := filepath.Join(result.OutputPath, "summary.txt")
+	summaryBytes, err := os.ReadFile(summaryPath)
+	if err != nil {
+		return tuidiagnose.ViewData{}, fmt.Errorf("reading diagnose summary: %w", err)
+	}
+
+	manifestPath := filepath.Join(result.OutputPath, "manifest.json")
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return tuidiagnose.ViewData{}, fmt.Errorf("reading diagnose manifest: %w", err)
+	}
+	var mf manifest
+	if err := json.Unmarshal(manifestBytes, &mf); err != nil {
+		return tuidiagnose.ViewData{}, fmt.Errorf("decoding diagnose manifest: %w", err)
+	}
+
+	warnings := make([]string, 0)
+	for _, line := range strings.Split(string(summaryBytes), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- ") {
+			warnings = append(warnings, strings.TrimPrefix(trimmed, "- "))
+		}
+	}
+
+	artifacts := make([]tuidiagnose.ManifestEntry, 0, len(mf.Artifacts))
+	for _, entry := range mf.Artifacts {
+		artifacts = append(artifacts, tuidiagnose.ManifestEntry{
+			Path:   entry.Path,
+			Status: entry.Status,
+			Reason: entry.Reason,
+		})
+	}
+
+	return tuidiagnose.ViewData{
+		Dataset:             datasetName,
+		Namespace:           namespace,
+		OutputPath:          result.OutputPath,
+		ArchivePath:         result.ArchivePath,
+		PartialFailureCount: result.PartialFailureCount,
+		Summary:             string(summaryBytes),
+		Artifacts:           artifacts,
+		WarningEvents:       warnings,
+	}, nil
 }
