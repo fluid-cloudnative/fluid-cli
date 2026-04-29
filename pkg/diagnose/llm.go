@@ -12,11 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package version
+package diagnose
 
-// These variables are set via -ldflags at build time.
-var (
-	Version   = "dev"
-	GitCommit = "unknown"
-	BuildDate = "unknown"
+import (
+	"context"
+	"fmt"
 )
+
+type LLMRequest struct {
+	Endpoint string
+	Prompt   string
+}
+
+type LLMClient interface {
+	Diagnose(ctx context.Context, req LLMRequest) (string, error)
+}
+
+// NoopLLMClient is a Phase 3 placeholder. HTTP integration is intentionally deferred.
+type NoopLLMClient struct{}
+
+func (NoopLLMClient) Diagnose(_ context.Context, req LLMRequest) (string, error) {
+	return "", fmt.Errorf("llm diagnose is not implemented (endpoint=%q)", req.Endpoint)
+}

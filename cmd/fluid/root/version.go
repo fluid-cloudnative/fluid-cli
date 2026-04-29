@@ -12,18 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package root
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/fluid-cloudnative/fluid-cli/cmd/fluid/root"
+	"github.com/fluid-cloudnative/fluid-cli/cmd/fluid/internal/version"
+	"github.com/spf13/cobra"
 )
 
-func main() {
-	if err := root.NewRootCmd().Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+func versionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version of fluid",
+		Long:  "Print version, git commit, and build date of fluid.",
+		Example: `  # Print version
+  fluid version`,
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("fluid\n")
+			fmt.Printf("  Version:    %s\n", version.Version)
+			fmt.Printf("  Git Commit: %s\n", version.GitCommit)
+			fmt.Printf("  Build Date: %s\n", version.BuildDate)
+		},
 	}
 }
