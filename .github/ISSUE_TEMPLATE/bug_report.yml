@@ -68,8 +68,7 @@ body:
     attributes:
       label: How are you invoking the tool?
       options:
-        - fluid (standalone binary)
-        - kubectl fluid (plugin)
+        - fluid
         - Not sure
     validations:
       required: true
