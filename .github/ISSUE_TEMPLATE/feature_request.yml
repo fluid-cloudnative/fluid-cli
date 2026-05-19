@@ -1,0 +1,72 @@
+# Copyright 2026 The Fluid Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: "Fluid CLI — feature / UX idea"
+description: Suggest a new command, flag, output format, or workflow improvement for operating Fluid from the terminal.
+title: "[idea] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Good CLI features are **discoverable**, **predictable**, and safe on real clusters. A concrete example command or snippet helps a lot.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or gap
+      description: What are you trying to accomplish with Fluid on a cluster, and what's missing from the CLI today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Example invocations, flags, default output, and how errors should read.
+      placeholder: |
+        fluid datasets list -A --sort=age
+        # prints: namespace, name, phase, dataset ref, last transition
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Primary surface
+      options:
+        - New subcommand
+        - Extend an existing subcommand
+        - TUI / interactive flow
+        - Output / formatting only
+        - Docs / help text
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility notes
+      description: Should this be backward compatible? Any kubectl version constraints or breaking changes you're OK with?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: I’m proposing this for fluid-cli (not Fluid controller behavior unless the CLI must surface it).
+          required: true

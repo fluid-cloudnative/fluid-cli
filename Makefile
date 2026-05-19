@@ -28,7 +28,7 @@ GO      ?= go
 GOOS    ?= $(shell $(GO) env GOOS)
 GOARCH  ?= $(shell $(GO) env GOARCH)
 
-.PHONY: all build fmt vet test install-plugin uninstall-plugin clean help
+.PHONY: all build fmt vet test docs install-plugin uninstall-plugin clean help
 
 all: build
 
@@ -78,7 +78,11 @@ vet:
 test:
 	$(GO) test ./... -v -count=1
 
-## install-plugin: Install the binary into the same directory as kubectl (as kubectl-fluid).
+## docs: Regenerate docs/reference/ from the Cobra command tree.
+docs:
+	$(GO) run ./hack/gen-docs
+
+## install-plugin: Install the fluid binary onto PATH.
 install-plugin: build
 	@KUBECTL_DIR=$$(dirname $$(which kubectl 2>/dev/null) 2>/dev/null); \
 	if [ -z "$$KUBECTL_DIR" ]; then \
@@ -89,7 +93,7 @@ install-plugin: build
 	echo "Installed $$KUBECTL_DIR/$(BINARY)"; \
 	echo "Run: fluid --help"
 
-## uninstall-plugin: Remove the installed plugin binary.
+## uninstall-plugin: Remove the installed fluid binary.
 uninstall-plugin:
 	@KUBECTL_DIR=$$(dirname $$(which kubectl 2>/dev/null) 2>/dev/null); \
 	if [ -z "$$KUBECTL_DIR" ]; then KUBECTL_DIR=/usr/local/bin; fi; \

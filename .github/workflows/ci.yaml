@@ -1,0 +1,77 @@
+# Copyright 2026 The Fluid Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# CI uses only the Go toolchain and GitHub-hosted runners (no Dagger or other build DAG).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths-ignore:
+      - "*.md"
+      - "assets/**"
+      - "docs/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify module checksums
+        run: go mod verify
+
+      - name: Verify gofmt
+        run: |
+          set -euo pipefail
+          out="$(find . -name '*.go' -not -path './vendor/*' -print0 | xargs -0 -r gofmt -l)"
+          if [ -n "${out}" ]; then
+            echo "${out}"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (race)
+        run: go test ./... -count=1 -race -timeout=5m
+
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go build -trimpath -ldflags '-s -w' -o /dev/null ./cmd/fluid
+
+      - name: Verify generated docs
+        run: |
+          make docs
+          git diff --exit-code docs/reference/
