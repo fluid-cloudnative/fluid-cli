@@ -32,6 +32,13 @@ fluid diagnose <dataset-name> [flags]
 
   # Only collect events from the last hour
   fluid diagnose my-dataset -n default --since 1h
+
+  # Configure LLM settings (OpenAI-compatible API)
+  fluid diagnose config set llm-endpoint https://api.openai.com/v1
+  export FLUID_LLM_API_KEY=sk-...
+
+  # Collect artifacts and request LLM analysis
+  fluid diagnose my-dataset -n default -o dir
 ```
 
 ### Options
@@ -40,9 +47,13 @@ fluid diagnose <dataset-name> [flags]
       --archive                   Package artifacts into a tar.gz archive
   -h, --help                      help for diagnose
       --include-controller-logs   Also collect Fluid controller logs from fluid-system namespace
+      --llm-endpoint string       LLM API base URL (overrides FLUID_LLM_ENDPOINT and ~/.fluid/config)
+      --llm-model string          LLM model name (overrides FLUID_LLM_MODEL and ~/.fluid/config)
+      --llm-skip                  Skip LLM analysis (when endpoint is configured, analysis runs by default)
       --no-logs                   Skip collecting pod logs (useful in large clusters)
   -o, --output string             Output mode: tui|dir|stdout (default "tui")
       --output-dir string         Directory to write artifacts (default: fluid-diagnose-<dataset>-<timestamp>)
+      --prompt-file string        Also write prompt-ready diagnostic text to this file
       --since string              Only collect logs/events newer than this duration (e.g. 1h, 30m)
 ```
 
@@ -72,4 +83,5 @@ fluid diagnose <dataset-name> [flags]
 ### SEE ALSO
 
 * [fluid](fluid.md)	 - Inspect and diagnose Fluid-managed datasets
+* [fluid diagnose config](fluid_diagnose_config.md)	 - Manage diagnose AI/LLM settings
 

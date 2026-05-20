@@ -250,3 +250,54 @@ func TestCollectPVC_PathIncludesNamespace(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_WritesAIOutputs(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := fluidv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add fluid scheme: %v", err)
+	}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add corev1 scheme: %v", err)
+	}
+
+	dataset := &fluidv1alpha1.Dataset{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo",
+			Namespace: "default",
+		},
+	}
+
+	c := ctrlclientfake.NewClientBuilder().WithScheme(scheme).WithObjects(dataset).Build()
+	kubeClient := kubefake.NewSimpleClientset()
+	runner := NewRunner(c, kubeClient)
+	runner.nowFn = func() time.Time { return time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC) }
+
+	outputDir := t.TempDir()
+	result, err := runner.Run(context.Background(), Options{
+		DatasetName: "demo",
+		Namespace:   "default",
+		Output:      "dir",
+		OutputDir:   outputDir,
+		NoLogs:      true,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	contextPath := filepath.Join(outputDir, "context.json")
+	if _, err := os.Stat(contextPath); err != nil {
+		t.Fatalf("context.json missing: %v", err)
+	}
+	promptPath := filepath.Join(outputDir, "prompt.txt")
+	if _, err := os.Stat(promptPath); err != nil {
+		t.Fatalf("prompt.txt missing: %v", err)
+	}
+	if result.ContextPath != contextPath {
+		t.Fatalf("ContextPath: got %q want %q", result.ContextPath, contextPath)
+	}
+	if result.PromptPath != promptPath {
+		t.Fatalf("PromptPath: got %q want %q", result.PromptPath, promptPath)
+	}
+}

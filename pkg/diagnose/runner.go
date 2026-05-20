@@ -49,6 +49,14 @@ type Options struct {
 	NoLogs                bool
 	IncludeControllerLogs bool
 	Since                 string
+
+	// AI-assisted diagnosis
+	PromptFile  string
+	LLMEndpoint string
+	LLMAPIKey   string
+	LLMModel    string
+	LLMSkip     bool
+	Stderr      io.Writer
 }
 
 type Result struct {
@@ -56,6 +64,9 @@ type Result struct {
 	ArchivePath         string
 	PartialFailureCount int
 	Stdout              string
+	ContextPath         string
+	PromptPath          string
+	LLMAnalysisPath     string
 }
 
 type Runner struct {
@@ -129,6 +140,7 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 	r.writeYAML(baseDir, "dataset.yaml", dataset, m)
 	r.writeText(baseDir, "dataset.describe.txt", describeDataset(dataset), m)
 
+	var runtimeObjs []*unstructured.Unstructured
 	for _, rt := range dataset.Status.Runtimes {
 		runtimeNS := rt.Namespace
 		if runtimeNS == "" {
@@ -151,6 +163,7 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 		r.writeYAML(baseDir, rtPathPrefix+".yaml", u.Object, m)
 		r.writeText(baseDir, rtPathPrefix+".describe.txt", describeUnstructuredRuntime(u), m)
+		runtimeObjs = append(runtimeObjs, u.DeepCopy())
 	}
 
 	inspector := inspect.New(r.client)
@@ -162,6 +175,7 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 	seenPods := map[string]struct{}{}
 	seenPVCs := map[string]struct{}{}
 	seenPVs := map[string]struct{}{}
+	var collectedPods []corev1.Pod
 
 	for _, rr := range report.Runtimes {
 		for _, row := range rr.Resources {
@@ -172,7 +186,9 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 					continue
 				}
 				seenPods[key] = struct{}{}
-				r.collectPod(ctx, baseDir, row.Namespace, row.Name, opts, m)
+				if pod, ok := r.collectPod(ctx, baseDir, row.Namespace, row.Name, opts, m); ok {
+					collectedPods = append(collectedPods, pod)
+				}
 			case "PVC":
 				key := row.Namespace + "/" + row.Name
 				if _, ok := seenPVCs[key]; ok {
@@ -202,7 +218,7 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 		r.collectPV(ctx, baseDir, canonicalPVName, m)
 	}
 
-	r.collectEvents(ctx, baseDir, opts, m)
+	collectedEvents := r.collectEvents(ctx, baseDir, opts, m)
 	if opts.IncludeControllerLogs && !opts.NoLogs {
 		r.collectControllerLogs(ctx, baseDir, opts, m)
 	}
@@ -226,9 +242,26 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("writing manifest: %w", err)
 	}
 
+	aiPaths, err := writeAIOutputs(ctx, baseDir, BuildContextInput{
+		GeneratedAt: r.nowFn(),
+		Dataset:     dataset,
+		Report:      report,
+		RuntimeObjs: runtimeObjs,
+		Pods:        collectedPods,
+		Events:      collectedEvents,
+		NoLogs:      opts.NoLogs,
+		Since:       opts.Since,
+	}, opts, opts.Stderr)
+	if err != nil {
+		return nil, err
+	}
+
 	result := &Result{
 		OutputPath:          baseDir,
 		PartialFailureCount: failures,
+		ContextPath:         aiPaths.ContextPath,
+		PromptPath:          aiPaths.PromptPath,
+		LLMAnalysisPath:     aiPaths.AnalysisPath,
 	}
 	if opts.Archive {
 		archivePath := baseDir + ".tar.gz"
@@ -343,24 +376,78 @@ func (r *Runner) runStdout(ctx context.Context, opts Options) (*Result, error) {
 		}
 	}
 
-	return &Result{
-		Stdout: b.String(),
-	}, nil
+	stdout := b.String()
+	result := &Result{Stdout: stdout}
+
+	if strings.TrimSpace(opts.PromptFile) != "" {
+		var runtimeObjs []*unstructured.Unstructured
+		for _, rt := range dataset.Status.Runtimes {
+			runtimeNS := rt.Namespace
+			if runtimeNS == "" {
+				runtimeNS = opts.Namespace
+			}
+			u := &unstructured.Unstructured{}
+			u.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "data.fluid.io",
+				Version: "v1alpha1",
+				Kind:    rt.Type,
+			})
+			if err := r.client.Get(ctx, types.NamespacedName{Name: rt.Name, Namespace: runtimeNS}, u); err == nil {
+				runtimeObjs = append(runtimeObjs, u.DeepCopy())
+			}
+		}
+
+		var collectedPods []corev1.Pod
+		for _, rr := range report.Runtimes {
+			for _, row := range rr.Resources {
+				if row.Kind != "Pod" {
+					continue
+				}
+				pod := &corev1.Pod{}
+				if err := r.client.Get(ctx, types.NamespacedName{Name: row.Name, Namespace: row.Namespace}, pod); err == nil {
+					collectedPods = append(collectedPods, *pod)
+				}
+			}
+		}
+
+		var collectedEvents []corev1.Event
+		if evList, err := r.kubeClient.CoreV1().Events(opts.Namespace).List(ctx, metav1.ListOptions{}); err == nil {
+			collectedEvents = filterEvents(evList.Items, opts.Since, r.nowFn())
+		}
+
+		aiPaths, err := writeAIOutputs(ctx, "", BuildContextInput{
+			GeneratedAt: r.nowFn(),
+			Dataset:     dataset,
+			Report:      report,
+			RuntimeObjs: runtimeObjs,
+			Pods:        collectedPods,
+			Events:      collectedEvents,
+			NoLogs:      opts.NoLogs,
+			Since:       opts.Since,
+		}, opts, opts.Stderr)
+		if err != nil {
+			return nil, err
+		}
+		result.PromptPath = aiPaths.PromptPath
+		result.LLMAnalysisPath = aiPaths.AnalysisPath
+	}
+
+	return result, nil
 }
 
-func (r *Runner) collectPod(ctx context.Context, baseDir, namespace, name string, opts Options, m *manifest) {
+func (r *Runner) collectPod(ctx context.Context, baseDir, namespace, name string, opts Options, m *manifest) (corev1.Pod, bool) {
 	podPrefix := fmt.Sprintf("pods/%s/%s", namespace, name)
 	pod := &corev1.Pod{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, pod); err != nil {
 		m.Artifacts = append(m.Artifacts, manifestEntry{Path: podPrefix + "/pod.yaml", Status: "failed", Reason: err.Error()})
-		return
+		return corev1.Pod{}, false
 	}
 	r.writeYAML(baseDir, podPrefix+"/pod.yaml", pod, m)
 	r.writeText(baseDir, podPrefix+"/describe.txt", describePod(pod), m)
 
 	if opts.NoLogs {
 		m.Artifacts = append(m.Artifacts, manifestEntry{Path: podPrefix + "/logs.txt", Status: "skipped", Reason: "--no-logs enabled"})
-		return
+		return *pod, true
 	}
 
 	var sincePtr *metav1.Time
@@ -388,6 +475,7 @@ func (r *Runner) collectPod(ctx context.Context, baseDir, namespace, name string
 		b.WriteString("\n")
 	}
 	r.writeText(baseDir, podPrefix+"/logs.txt", b.String(), m)
+	return *pod, true
 }
 
 func copyPodLog(b *strings.Builder, stream io.ReadCloser) {
@@ -418,20 +506,26 @@ func (r *Runner) collectPV(ctx context.Context, baseDir, name string, m *manifes
 	r.writeText(baseDir, fmt.Sprintf("storage/pv-%s.describe.txt", name), describePV(pv), m)
 }
 
-func (r *Runner) collectEvents(ctx context.Context, baseDir string, opts Options, m *manifest) {
+func (r *Runner) collectEvents(ctx context.Context, baseDir string, opts Options, m *manifest) []corev1.Event {
 	evList, err := r.kubeClient.CoreV1().Events(opts.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		m.Artifacts = append(m.Artifacts, manifestEntry{Path: "events/events.yaml", Status: "failed", Reason: err.Error()})
-		return
+		return nil
 	}
-	items := make([]corev1.Event, 0, len(evList.Items))
+	items := filterEvents(evList.Items, opts.Since, r.nowFn())
+	r.writeYAML(baseDir, "events/events.yaml", map[string]any{"items": items}, m)
+	return items
+}
+
+func filterEvents(events []corev1.Event, since string, now time.Time) []corev1.Event {
+	items := make([]corev1.Event, 0, len(events))
 	sinceCutoff := time.Time{}
-	if opts.Since != "" {
-		if d, err := time.ParseDuration(opts.Since); err == nil {
-			sinceCutoff = r.nowFn().Add(-d)
+	if since != "" {
+		if d, err := time.ParseDuration(since); err == nil {
+			sinceCutoff = now.Add(-d)
 		}
 	}
-	for _, ev := range evList.Items {
+	for _, ev := range events {
 		eventTs := eventTimestamp(ev)
 		if !sinceCutoff.IsZero() && !eventTs.IsZero() && eventTs.Before(sinceCutoff) {
 			continue
@@ -441,7 +535,7 @@ func (r *Runner) collectEvents(ctx context.Context, baseDir string, opts Options
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].LastTimestamp.Time.Before(items[j].LastTimestamp.Time)
 	})
-	r.writeYAML(baseDir, "events/events.yaml", map[string]any{"items": items}, m)
+	return items
 }
 
 func eventTimestamp(ev corev1.Event) time.Time {

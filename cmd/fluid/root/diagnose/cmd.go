@@ -48,8 +48,10 @@ type Options struct {
 	includeControllerLogs bool
 	since                 string
 
-	// LLM/AI output (Phase 3 stub)
-	promptFile string
+	promptFile  string
+	llmEndpoint string
+	llmModel    string
+	llmSkip     bool
 }
 
 func NewDiagnoseCommand(configFlags *genericclioptions.ConfigFlags) *cobra.Command {
@@ -79,7 +81,14 @@ into a tar.gz archive.`,
   fluid diagnose my-dataset -n default --output-dir /tmp/diag --no-logs
 
   # Only collect events from the last hour
-  fluid diagnose my-dataset -n default --since 1h`,
+  fluid diagnose my-dataset -n default --since 1h
+
+  # Configure LLM settings (OpenAI-compatible API)
+  fluid diagnose config set llm-endpoint https://api.openai.com/v1
+  export FLUID_LLM_API_KEY=sk-...
+
+  # Collect artifacts and request LLM analysis
+  fluid diagnose my-dataset -n default -o dir`,
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -111,9 +120,13 @@ into a tar.gz archive.`,
 	cmd.Flags().BoolVar(&o.includeControllerLogs, "include-controller-logs", false, "Also collect Fluid controller logs from fluid-system namespace")
 	cmd.Flags().StringVar(&o.since, "since", "", "Only collect logs/events newer than this duration (e.g. 1h, 30m)")
 
-	// Phase 3 stub
-	cmd.Flags().StringVar(&o.promptFile, "prompt-file", "", "[Phase 3] Write prompt-ready diagnostic context to this file")
-	_ = cmd.Flags().MarkHidden("prompt-file")
+	// AI-assisted diagnosis
+	cmd.Flags().StringVar(&o.promptFile, "prompt-file", "", "Also write prompt-ready diagnostic text to this file")
+	cmd.Flags().StringVar(&o.llmEndpoint, "llm-endpoint", "", "LLM API base URL (overrides FLUID_LLM_ENDPOINT and ~/.fluid/config)")
+	cmd.Flags().StringVar(&o.llmModel, "llm-model", "", "LLM model name (overrides FLUID_LLM_MODEL and ~/.fluid/config)")
+	cmd.Flags().BoolVar(&o.llmSkip, "llm-skip", false, "Skip LLM analysis (when endpoint is configured, analysis runs by default)")
+
+	cmd.AddCommand(newConfigCommand())
 
 	return cmd
 }
@@ -138,6 +151,11 @@ func (o *Options) run(cmd *cobra.Command) error {
 		return fmt.Errorf("invalid output mode %q, expected tui|dir|stdout", o.output)
 	}
 
+	llmSettings, err := diagpkg.ResolveLLMSettings(o.llmEndpoint, o.llmModel, o.llmSkip, cmd.Flags().Changed("llm-skip"))
+	if err != nil {
+		return err
+	}
+
 	runOpts := diagpkg.Options{
 		DatasetName:           o.datasetName,
 		Namespace:             o.namespace,
@@ -147,6 +165,12 @@ func (o *Options) run(cmd *cobra.Command) error {
 		NoLogs:                o.noLogs,
 		IncludeControllerLogs: o.includeControllerLogs,
 		Since:                 o.since,
+		PromptFile:            o.promptFile,
+		LLMEndpoint:           llmSettings.Endpoint,
+		LLMAPIKey:             llmSettings.APIKey,
+		LLMModel:              llmSettings.Model,
+		LLMSkip:               llmSettings.Skip,
+		Stderr:                cmd.ErrOrStderr(),
 	}
 	if o.output == "tui" {
 		runOpts.Output = "dir"
@@ -184,6 +208,15 @@ func (o *Options) run(cmd *cobra.Command) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "diagnose: collected artifacts at %s\n", result.OutputPath)
+	if result.ContextPath != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "diagnose: diagnostic context written to %s\n", result.ContextPath)
+	}
+	if result.PromptPath != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "diagnose: prompt written to %s\n", result.PromptPath)
+	}
+	if result.LLMAnalysisPath != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "diagnose: LLM analysis written to %s\n", result.LLMAnalysisPath)
+	}
 	if result.ArchivePath != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "diagnose: archive written to %s\n", result.ArchivePath)
 	}

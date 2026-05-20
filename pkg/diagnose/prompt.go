@@ -42,11 +42,33 @@ func ContextAsJSON(ctx *DiagnosticContext) ([]byte, error) {
 	return json.MarshalIndent(ctx, "", "  ")
 }
 
+const modelInstructionsText = `- Focus on diagnosis only: unhealthy signals, evidence correlation, ranked hypotheses, and uncertainties.
+- Do not provide remediation instructions, shell commands, or kubectl/helm operations.
+- If data is insufficient, state what additional observations would increase confidence.`
+
 func writeModelInstructions(b *strings.Builder) {
 	b.WriteString("## Instructions\n")
-	b.WriteString("- Focus on diagnosis only: unhealthy signals, evidence correlation, ranked hypotheses, and uncertainties.\n")
-	b.WriteString("- Do not provide remediation instructions, shell commands, or kubectl/helm operations.\n")
-	b.WriteString("- If data is insufficient, state what additional observations would increase confidence.\n\n")
+	b.WriteString(modelInstructionsText)
+	b.WriteString("\n\n")
+}
+
+// SplitPromptForChat separates system instructions from user diagnostic content.
+func SplitPromptForChat(prompt string) (system string, user string) {
+	system = "You are a Kubernetes and Fluid storage expert assisting with dataset diagnosis.\n\n" + modelInstructionsText
+	marker := "## Instructions"
+	if idx := strings.Index(prompt, marker); idx >= 0 {
+		rest := prompt[idx+len(marker):]
+		if nl := strings.Index(rest, "\n"); nl >= 0 {
+			rest = strings.TrimLeft(rest[nl:], "\n")
+		}
+		user = strings.TrimSpace(rest)
+	} else {
+		user = strings.TrimSpace(prompt)
+	}
+	if user == "" {
+		user = prompt
+	}
+	return system, user
 }
 
 func writeDatasetSection(b *strings.Builder, ds DatasetContext) {

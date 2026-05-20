@@ -12,15 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// LLM integration uses an OpenAI-compatible chat completions API (net/http only).
+//
+//   POST {endpoint}/v1/chat/completions
+//   Authorization: Bearer <api_key>
+//   Body: { "model": "...", "messages": [ { "role": "system", ... }, { "role": "user", ... } ] }
+
 package diagnose
 
 import (
 	"context"
-	"fmt"
+	"strings"
 )
+
+const defaultLLMModel = "gpt-4o-mini"
 
 type LLMRequest struct {
 	Endpoint string
+	APIKey   string
+	Model    string
 	Prompt   string
 }
 
@@ -28,9 +38,17 @@ type LLMClient interface {
 	Diagnose(ctx context.Context, req LLMRequest) (string, error)
 }
 
-// NoopLLMClient is a Phase 3 placeholder. HTTP integration is intentionally deferred.
+// NoopLLMClient skips remote calls.
 type NoopLLMClient struct{}
 
-func (NoopLLMClient) Diagnose(_ context.Context, req LLMRequest) (string, error) {
-	return "", fmt.Errorf("llm diagnose is not implemented (endpoint=%q)", req.Endpoint)
+func (NoopLLMClient) Diagnose(_ context.Context, _ LLMRequest) (string, error) {
+	return "", nil
+}
+
+// NewLLMClient returns an HTTP client when endpoint is set and skip is false.
+func NewLLMClient(endpoint string, skip bool) LLMClient {
+	if skip || strings.TrimSpace(endpoint) == "" {
+		return NoopLLMClient{}
+	}
+	return &HTTPLLMClient{}
 }
