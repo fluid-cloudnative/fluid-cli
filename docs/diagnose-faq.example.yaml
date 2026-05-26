@@ -1,0 +1,16 @@
+# Example FAQ catalog for `fluid diagnose --faq-file`.
+# Copy or symlink from the Fluid main repository when available, e.g.:
+#   fluid diagnose my-dataset --faq-file ../fluid/docs/diagnose-faq.yaml
+#
+version: fluid-diagnose-faq/v1
+faqs:
+  - id: faq-custom-mount-path
+    title: Suspected invalid Dataset mount configuration
+    category: misconfiguration
+    confidence: high
+    symptom: Dataset has no mounts while phase is NotBound
+    likelyCause: Dataset spec.mounts may be missing or mount points may be incorrect
+    whatToVerify: Dataset spec.mounts and runtime-specific mount requirements in Fluid docs
+    when:
+      datasetPhaseIn: ["NotBound", "Pending"]
+      datasetMountsEmpty: true

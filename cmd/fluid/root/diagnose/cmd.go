@@ -52,6 +52,8 @@ type Options struct {
 	llmEndpoint string
 	llmModel    string
 	llmSkip     bool
+	faqSkip     bool
+	faqFile     string
 }
 
 func NewDiagnoseCommand(configFlags *genericclioptions.ConfigFlags) *cobra.Command {
@@ -125,6 +127,8 @@ into a tar.gz archive.`,
 	cmd.Flags().StringVar(&o.llmEndpoint, "llm-endpoint", "", "LLM API base URL (overrides FLUID_LLM_ENDPOINT and ~/.fluid/config)")
 	cmd.Flags().StringVar(&o.llmModel, "llm-model", "", "LLM model name (overrides FLUID_LLM_MODEL and ~/.fluid/config)")
 	cmd.Flags().BoolVar(&o.llmSkip, "llm-skip", false, "Skip LLM analysis (when endpoint is configured, analysis runs by default)")
+	cmd.Flags().BoolVar(&o.faqSkip, "faq-skip", false, "Skip known-issue FAQ matching in AI context and prompts")
+	cmd.Flags().StringVar(&o.faqFile, "faq-file", "", "YAML FAQ catalog (e.g. from Fluid main repo); merges with built-in rules, file entries override same id")
 
 	cmd.AddCommand(newConfigCommand())
 
@@ -170,6 +174,8 @@ func (o *Options) run(cmd *cobra.Command) error {
 		LLMAPIKey:             llmSettings.APIKey,
 		LLMModel:              llmSettings.Model,
 		LLMSkip:               llmSettings.Skip,
+		FAQSkip:               o.faqSkip,
+		FAQFile:               o.faqFile,
 		Stderr:                cmd.ErrOrStderr(),
 	}
 	if o.output == "tui" {

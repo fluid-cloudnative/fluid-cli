@@ -62,10 +62,10 @@ func TestChatCompletionsURL(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"https://api.openai.com":        "https://api.openai.com/v1/chat/completions",
-		"https://api.openai.com/":       "https://api.openai.com/v1/chat/completions",
-		"https://api.openai.com/v1":     "https://api.openai.com/v1/chat/completions",
-		"https://api.openai.com/v1/":    "https://api.openai.com/v1/chat/completions",
+		"https://api.openai.com":     "https://api.openai.com/v1/chat/completions",
+		"https://api.openai.com/":    "https://api.openai.com/v1/chat/completions",
+		"https://api.openai.com/v1":  "https://api.openai.com/v1/chat/completions",
+		"https://api.openai.com/v1/": "https://api.openai.com/v1/chat/completions",
 	}
 	for in, want := range cases {
 		if got := chatCompletionsURL(in); got != want {

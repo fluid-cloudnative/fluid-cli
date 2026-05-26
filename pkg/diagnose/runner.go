@@ -56,6 +56,8 @@ type Options struct {
 	LLMAPIKey   string
 	LLMModel    string
 	LLMSkip     bool
+	FAQSkip     bool
+	FAQFile     string
 	Stderr      io.Writer
 }
 
@@ -251,6 +253,7 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 		Events:      collectedEvents,
 		NoLogs:      opts.NoLogs,
 		Since:       opts.Since,
+		FAQ:         FAQOptions{Skip: opts.FAQSkip, File: opts.FAQFile},
 	}, opts, opts.Stderr)
 	if err != nil {
 		return nil, err
@@ -424,6 +427,7 @@ func (r *Runner) runStdout(ctx context.Context, opts Options) (*Result, error) {
 			Events:      collectedEvents,
 			NoLogs:      opts.NoLogs,
 			Since:       opts.Since,
+			FAQ:         FAQOptions{Skip: opts.FAQSkip, File: opts.FAQFile},
 		}, opts, opts.Stderr)
 		if err != nil {
 			return nil, err

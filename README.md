@@ -37,9 +37,11 @@ fluid diagnose --help
 `fluid diagnose` can call an OpenAI-compatible LLM API to analyze collected cluster context, or export prompt files for manual copy/paste.
 
 ```bash
-fluid diagnose config set llm-endpoint https://api.openai.com/v1
-export FLUID_LLM_API_KEY=sk-...
+# Interactive setup (Bubble Tea form)
+fluid diagnose config
 
+# Or set values via CLI / env
+export FLUID_LLM_API_KEY=sk-...
 fluid diagnose my-dataset -n default -o dir
 ```
 

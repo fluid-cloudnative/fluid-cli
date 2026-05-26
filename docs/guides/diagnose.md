@@ -58,7 +58,9 @@ With `--archive`, a `.tar.gz` is produced alongside the directory (see command o
 
 ### Configure LLM settings
 
-Settings are stored in `~/.fluid/config` (prefer environment variables for secrets):
+**Interactive (recommended):** run `fluid diagnose config` to open a Bubble Tea form for endpoint, API key, and model.
+
+Settings are stored in `~/.fluid/config` (prefer environment variables for secrets). CLI subcommands remain for scripts:
 
 ```bash
 fluid diagnose config set llm-endpoint https://api.openai.com/v1
@@ -84,12 +86,37 @@ fluid diagnose my-dataset -n default -o dir
 
 Outputs:
 
-- `context.json` — trimmed JSON (dataset, runtimes, pods, warning events, summary)
-- `prompt.txt` — diagnosis-focused prompt (no remediation commands in the default template)
+- `context.json` — trimmed JSON (dataset, runtimes, pods, warning events, summary, **matchedFAQs**)
+- `prompt.txt` — diagnosis-focused prompt including **Matched FAQs** (known misconfiguration/operational patterns)
 - `llm-analysis.txt` — model response when analysis is enabled
 - `--prompt-file` — optional extra copy of the prompt
 
 Compatible with OpenAI, Azure OpenAI, and other OpenAI-compatible gateways (local proxies, vLLM, etc.).
+
+### FAQ / known-issue matching
+
+Before calling the LLM, the CLI runs a **rule-based FAQ catalog** against the diagnostic snapshot (built-in rules plus an optional file). Matches appear in `context.json` as `matchedFAQs` and in `prompt.txt` under **Matched FAQs**.
+
+| Flag | Purpose |
+|------|---------|
+| `--faq-skip` | Disable FAQ matching entirely |
+| `--faq-file <path>` | Load a FAQ file from disk. YAML files add matcher rules; Markdown files are parsed as reference-only Q&A for the LLM prompt |
+
+YAML matcher example: [`docs/diagnose-faq.example.yaml`](../diagnose-faq.example.yaml).
+
+```bash
+fluid diagnose my-dataset -n default -o dir \
+  --faq-file /path/to/fluid/docs/diagnose-faq.yaml
+```
+
+Markdown FAQ files in the Fluid main repository are also supported:
+
+```bash
+fluid diagnose my-dataset -n default -o dir \
+  --faq-file /path/to/fluid/docs/en/userguide/faq.md
+```
+
+Markdown entries are included under **Reference FAQs (background knowledge)** in `prompt.txt`; they are not treated as deterministic matches in `matchedFAQs`.
 
 ## Flags and help
 

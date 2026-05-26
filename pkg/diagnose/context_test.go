@@ -35,14 +35,14 @@ func TestBuildContext_DeterministicAndGuards(t *testing.T) {
 	events := make([]corev1.Event, 0, 60)
 	for i := 0; i < 60; i++ {
 		events = append(events, corev1.Event{
-			Type:   corev1.EventTypeWarning,
-			Reason: "Failed",
-			Message: strings.Repeat("e", 600),
+			Type:          corev1.EventTypeWarning,
+			Reason:        "Failed",
+			Message:       strings.Repeat("e", 600),
 			LastTimestamp: metav1.Time{Time: now.Add(time.Duration(i) * time.Minute)},
 		})
 	}
 
-	ctx := BuildContext(BuildContextInput{
+	ctx, err := BuildContext(BuildContextInput{
 		GeneratedAt: now,
 		Dataset:     ds,
 		Pods: []corev1.Pod{
@@ -50,7 +50,11 @@ func TestBuildContext_DeterministicAndGuards(t *testing.T) {
 			{ObjectMeta: metav1.ObjectMeta{Name: "a", Namespace: "default"}, Status: corev1.PodStatus{Phase: corev1.PodPending}},
 		},
 		Events: events,
+		FAQ:    FAQOptions{Skip: true},
 	})
+	if err != nil {
+		t.Fatalf("BuildContext: %v", err)
+	}
 
 	if ctx.Dataset.Labels["token"] != "<redacted>" {
 		t.Fatalf("expected redacted token label")
@@ -69,7 +73,7 @@ func TestBuildContext_DeterministicAndGuards(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	b2, err := json.Marshal(BuildContext(BuildContextInput{
+	ctx2, err := BuildContext(BuildContextInput{
 		GeneratedAt: now,
 		Dataset:     ds,
 		Pods: []corev1.Pod{
@@ -77,7 +81,12 @@ func TestBuildContext_DeterministicAndGuards(t *testing.T) {
 			{ObjectMeta: metav1.ObjectMeta{Name: "a", Namespace: "default"}, Status: corev1.PodStatus{Phase: corev1.PodPending}},
 		},
 		Events: events,
-	}))
+		FAQ:    FAQOptions{Skip: true},
+	})
+	if err != nil {
+		t.Fatalf("BuildContext 2: %v", err)
+	}
+	b2, err := json.Marshal(ctx2)
 	if err != nil {
 		t.Fatalf("marshal 2: %v", err)
 	}

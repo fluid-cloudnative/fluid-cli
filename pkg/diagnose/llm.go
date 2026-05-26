@@ -27,6 +27,11 @@ import (
 
 const defaultLLMModel = "gpt-4o-mini"
 
+// DefaultLLMModel returns the default model name when none is configured.
+func DefaultLLMModel() string {
+	return defaultLLMModel
+}
+
 type LLMRequest struct {
 	Endpoint string
 	APIKey   string

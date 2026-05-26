@@ -281,3 +281,68 @@ func UnsetLLMModel() error {
 	cfg.Diagnose.LLM.Model = ""
 	return SaveUserConfig(cfg)
 }
+
+// LLMFormDefaults are initial values for the interactive config form.
+type LLMFormDefaults struct {
+	Endpoint     string
+	Model        string
+	APIKeyInFile bool
+	APIKeyInEnv  bool
+	ConfigPath   string
+}
+
+// LoadLLMFormDefaults loads current file-based LLM settings for the config TUI.
+func LoadLLMFormDefaults() (LLMFormDefaults, error) {
+	path, err := ConfigPath()
+	if err != nil {
+		return LLMFormDefaults{}, err
+	}
+	cfg, err := LoadUserConfig()
+	if err != nil {
+		return LLMFormDefaults{}, err
+	}
+	return LLMFormDefaults{
+		Endpoint:     strings.TrimSpace(cfg.Diagnose.LLM.Endpoint),
+		Model:        strings.TrimSpace(cfg.Diagnose.LLM.Model),
+		APIKeyInFile: strings.TrimSpace(cfg.Diagnose.LLM.APIKey) != "",
+		APIKeyInEnv:  strings.TrimSpace(os.Getenv(envLLMAPIKey)) != "",
+		ConfigPath:   path,
+	}, nil
+}
+
+// LLMFormValues are submitted values from the interactive config form.
+type LLMFormValues struct {
+	Endpoint string
+	APIKey   string
+	Model    string
+}
+
+// ApplyLLMFormValues persists form values to ~/.fluid/config.
+// An empty API key leaves the existing key unchanged.
+func ApplyLLMFormValues(v LLMFormValues) error {
+	endpoint := strings.TrimSpace(v.Endpoint)
+	if endpoint == "" {
+		if err := UnsetLLMEndpoint(); err != nil {
+			return err
+		}
+	} else if err := SetLLMEndpoint(endpoint); err != nil {
+		return err
+	}
+
+	if key := strings.TrimSpace(v.APIKey); key != "" {
+		if err := SetLLMAPIKey(key); err != nil {
+			return err
+		}
+	}
+
+	model := strings.TrimSpace(v.Model)
+	if model == "" {
+		if err := UnsetLLMModel(); err != nil {
+			return err
+		}
+	} else if err := SetLLMModel(model); err != nil {
+		return err
+	}
+
+	return nil
+}

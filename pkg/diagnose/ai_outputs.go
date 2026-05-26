@@ -37,7 +37,10 @@ type aiOutputPaths struct {
 
 // writeAIOutputs builds DiagnosticContext and writes context.json, prompt, and optional LLM analysis.
 func writeAIOutputs(ctx context.Context, baseDir string, in BuildContextInput, opts Options, stderr io.Writer) (aiOutputPaths, error) {
-	diagCtx := BuildContext(in)
+	diagCtx, err := BuildContext(in)
+	if err != nil {
+		return aiOutputPaths{}, err
+	}
 	contextBytes, err := ContextAsJSON(diagCtx)
 	if err != nil {
 		return aiOutputPaths{}, fmt.Errorf("marshaling diagnostic context: %w", err)

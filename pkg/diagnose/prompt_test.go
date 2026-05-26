@@ -16,7 +16,7 @@ func TestFormatPrompt_Golden(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
-	ctx := BuildContext(BuildContextInput{
+	ctx, err := BuildContext(BuildContextInput{
 		GeneratedAt: now,
 		Dataset: &fluidv1alpha1.Dataset{
 			ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: "default"},
@@ -35,14 +35,18 @@ func TestFormatPrompt_Golden(t *testing.T) {
 		},
 		Events: []corev1.Event{
 			{
-				Type:          corev1.EventTypeWarning,
-				Reason:        "FailedMount",
-				Message:       "mount failed",
-				LastTimestamp: metav1.Time{Time: now},
+				Type:           corev1.EventTypeWarning,
+				Reason:         "FailedMount",
+				Message:        "mount failed",
+				LastTimestamp:  metav1.Time{Time: now},
 				InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "fuse"},
 			},
 		},
+		FAQ: FAQOptions{Skip: true},
 	})
+	if err != nil {
+		t.Fatalf("BuildContext: %v", err)
+	}
 
 	got := FormatPrompt(ctx)
 	golden := filepath.Join("testdata", "prompt_golden.txt")

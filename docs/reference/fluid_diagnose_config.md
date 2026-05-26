@@ -6,8 +6,15 @@ Manage diagnose AI/LLM settings
 
 Manage Fluid diagnose AI settings stored in ~/.fluid/config.
 
+Run without subcommands to open an interactive setup form (Bubble Tea TUI).
+Subcommands (set, get, unset, view) are available for scripting.
+
 Settings are used for OpenAI-compatible LLM analysis during fluid diagnose.
 Prefer FLUID_LLM_API_KEY for secrets instead of storing apiKey in the config file.
+
+```
+fluid diagnose config [flags]
+```
 
 ### Options
 

@@ -19,6 +19,8 @@ import (
 	"os"
 
 	diagpkg "github.com/fluid-cloudnative/fluid-cli/pkg/diagnose"
+	tuicommon "github.com/fluid-cloudnative/fluid-cli/pkg/tui/common"
+	tuiconfig "github.com/fluid-cloudnative/fluid-cli/pkg/tui/diagnoseconfig"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 )
@@ -29,8 +31,20 @@ func newConfigCommand() *cobra.Command {
 		Short: "Manage diagnose AI/LLM settings",
 		Long: `Manage Fluid diagnose AI settings stored in ~/.fluid/config.
 
+Run without subcommands to open an interactive setup form (Bubble Tea TUI).
+Subcommands (set, get, unset, view) are available for scripting.
+
 Settings are used for OpenAI-compatible LLM analysis during fluid diagnose.
 Prefer FLUID_LLM_API_KEY for secrets instead of storing apiKey in the config file.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return fmt.Errorf("unknown argument %q (use subcommands or run without args for interactive config)", args[0])
+			}
+			if err := tuicommon.EnsureInteractive(cmd.InOrStdin(), cmd.OutOrStdout(), "diagnose config"); err != nil {
+				return err
+			}
+			return tuiconfig.Run(cmd.InOrStdin(), cmd.OutOrStdout())
+		},
 	}
 
 	cmd.AddCommand(

@@ -45,6 +45,8 @@ fluid diagnose <dataset-name> [flags]
 
 ```
       --archive                   Package artifacts into a tar.gz archive
+      --faq-file string           YAML FAQ catalog (e.g. from Fluid main repo); merges with built-in rules, file entries override same id
+      --faq-skip                  Skip known-issue FAQ matching in AI context and prompts
   -h, --help                      help for diagnose
       --include-controller-logs   Also collect Fluid controller logs from fluid-system namespace
       --llm-endpoint string       LLM API base URL (overrides FLUID_LLM_ENDPOINT and ~/.fluid/config)
