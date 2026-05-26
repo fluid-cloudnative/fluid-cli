@@ -35,14 +35,14 @@ type FAQOptions struct {
 
 // FAQFileEntry is one FAQ rule in a YAML catalog (e.g. from the Fluid main repo).
 type FAQFileEntry struct {
-	ID           string      `json:"id" yaml:"id"`
-	Title        string      `json:"title" yaml:"title"`
-	Category     string      `json:"category" yaml:"category"`
-	Confidence   string      `json:"confidence,omitempty" yaml:"confidence,omitempty"`
-	Symptom      string      `json:"symptom" yaml:"symptom"`
-	LikelyCause  string      `json:"likelyCause" yaml:"likelyCause"`
-	WhatToVerify string      `json:"whatToVerify" yaml:"whatToVerify"`
-	When         FAQWhen     `json:"when" yaml:"when"`
+	ID           string  `json:"id" yaml:"id"`
+	Title        string  `json:"title" yaml:"title"`
+	Category     string  `json:"category" yaml:"category"`
+	Confidence   string  `json:"confidence,omitempty" yaml:"confidence,omitempty"`
+	Symptom      string  `json:"symptom" yaml:"symptom"`
+	LikelyCause  string  `json:"likelyCause" yaml:"likelyCause"`
+	WhatToVerify string  `json:"whatToVerify" yaml:"whatToVerify"`
+	When         FAQWhen `json:"when" yaml:"when"`
 }
 
 type faqFile struct {
