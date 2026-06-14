@@ -51,7 +51,7 @@ type Options struct {
 	promptFile  string
 	llmEndpoint string
 	llmModel    string
-	llmSkip     bool
+	llm         bool
 	faqSkip     bool
 	faqFile     string
 }
@@ -90,7 +90,7 @@ into a tar.gz archive.`,
   export FLUID_LLM_API_KEY=sk-...
 
   # Collect artifacts and request LLM analysis
-  fluid diagnose my-dataset -n default -o dir`,
+  fluid diagnose my-dataset -n default -o dir --llm`,
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -126,7 +126,7 @@ into a tar.gz archive.`,
 	cmd.Flags().StringVar(&o.promptFile, "prompt-file", "", "Also write prompt-ready diagnostic text to this file")
 	cmd.Flags().StringVar(&o.llmEndpoint, "llm-endpoint", "", "LLM API base URL (overrides FLUID_LLM_ENDPOINT and ~/.fluid/config)")
 	cmd.Flags().StringVar(&o.llmModel, "llm-model", "", "LLM model name (overrides FLUID_LLM_MODEL and ~/.fluid/config)")
-	cmd.Flags().BoolVar(&o.llmSkip, "llm-skip", false, "Skip LLM analysis (when endpoint is configured, analysis runs by default)")
+	cmd.Flags().BoolVar(&o.llm, "llm", false, "Run LLM analysis when endpoint and API key are configured")
 	cmd.Flags().BoolVar(&o.faqSkip, "faq-skip", false, "Skip known-issue FAQ matching in AI context and prompts")
 	cmd.Flags().StringVar(&o.faqFile, "faq-file", "", "YAML FAQ catalog (e.g. from Fluid main repo); merges with built-in rules, file entries override same id")
 
@@ -155,7 +155,7 @@ func (o *Options) run(cmd *cobra.Command) error {
 		return fmt.Errorf("invalid output mode %q, expected tui|dir|stdout", o.output)
 	}
 
-	llmSettings, err := diagpkg.ResolveLLMSettings(o.llmEndpoint, o.llmModel, o.llmSkip, cmd.Flags().Changed("llm-skip"))
+	llmSettings, err := diagpkg.ResolveLLMSettings(o.llmEndpoint, o.llmModel, o.llm, cmd.Flags().Changed("llm"))
 	if err != nil {
 		return err
 	}

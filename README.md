@@ -45,7 +45,7 @@ export FLUID_LLM_API_KEY=sk-...
 fluid diagnose my-dataset -n default -o dir
 ```
 
-Artifact directory includes `context.json`, `prompt.txt`, and `llm-analysis.txt` when LLM analysis runs. Use `--llm-skip` to collect prompts only without calling the API.
+Artifact directory includes `context.json` and `prompt.txt` by default. Pass `--llm` to also write `llm-analysis.txt` when an endpoint and API key are configured.
 
 See [Diagnose guide](docs/guides/diagnose.md) for details.
 

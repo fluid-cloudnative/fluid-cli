@@ -61,28 +61,32 @@ func TestResolveLLMSettings_Precedence(t *testing.T) {
 	if settings.APIKey != "env-key" {
 		t.Fatalf("env api key: got %q", settings.APIKey)
 	}
-	if settings.Skip {
-		t.Fatal("expected skip=false when endpoint configured without --llm-skip")
+	if !settings.Skip {
+		t.Fatal("expected skip=true when endpoint configured without --llm")
 	}
 
 	t.Setenv(envLLMAPIKey, "")
-	_, err = ResolveLLMSettings("https://flag.example/v1", "", false, false)
-	if err == nil {
-		t.Fatal("expected error when endpoint set without API key")
+	settings, err = ResolveLLMSettings("https://flag.example/v1", "", false, false)
+	if err != nil {
+		t.Fatalf("ResolveLLMSettings endpoint without --llm: %v", err)
+	}
+	if !settings.Skip {
+		t.Fatal("expected skip=true without --llm even when endpoint is set")
 	}
 
-	settings, err = ResolveLLMSettings("https://flag.example/v1", "", false, true)
+	settings, err = ResolveLLMSettings("https://flag.example/v1", "", true, true)
 	if err == nil {
-		t.Fatal("expected error when skip=false without API key")
+		t.Fatal("expected error when --llm without API key")
 	}
 	_ = settings
 
+	t.Setenv(envLLMAPIKey, "env-key")
 	settings, err = ResolveLLMSettings("https://flag.example/v1", "custom-model", true, true)
 	if err != nil {
-		t.Fatalf("ResolveLLMSettings explicit skip: %v", err)
+		t.Fatalf("ResolveLLMSettings with --llm: %v", err)
 	}
-	if !settings.Skip {
-		t.Fatal("expected skip=true when --llm-skip=true")
+	if settings.Skip {
+		t.Fatal("expected skip=false when --llm is set")
 	}
 	if settings.Model != "custom-model" {
 		t.Fatalf("model: got %q", settings.Model)

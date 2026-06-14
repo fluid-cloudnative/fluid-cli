@@ -124,8 +124,8 @@ func ValidateLLMEndpoint(endpoint string) error {
 // endpoint: flag > FLUID_LLM_ENDPOINT > ~/.fluid/config
 // api_key:  FLUID_LLM_API_KEY > ~/.fluid/config
 // model:    flag > FLUID_LLM_MODEL > ~/.fluid/config > defaultLLMModel
-// skip:     explicit --llm-skip; when endpoint is set and --llm-skip not passed, LLM is enabled
-func ResolveLLMSettings(flagEndpoint, flagModel string, flagSkip, flagSkipSet bool) (LLMSettings, error) {
+// skip:     LLM is skipped by default; pass --llm to enable analysis when endpoint is configured
+func ResolveLLMSettings(flagEndpoint, flagModel string, flagLLM, flagLLMSet bool) (LLMSettings, error) {
 	settings := LLMSettings{Skip: true, Model: defaultLLMModel}
 
 	cfg, err := LoadUserConfig()
@@ -166,12 +166,8 @@ func ResolveLLMSettings(flagEndpoint, flagModel string, flagSkip, flagSkipSet bo
 		settings.Model = fileModel
 	}
 
-	if settings.Endpoint != "" {
-		if flagSkipSet {
-			settings.Skip = flagSkip
-		} else {
-			settings.Skip = false
-		}
+	if settings.Endpoint != "" && flagLLMSet && flagLLM {
+		settings.Skip = false
 	}
 
 	if !settings.Skip && settings.Endpoint != "" && settings.APIKey == "" {

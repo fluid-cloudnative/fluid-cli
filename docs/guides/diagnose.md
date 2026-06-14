@@ -76,12 +76,12 @@ fluid diagnose config view
 | API key | — | `FLUID_LLM_API_KEY` | `diagnose.llm.apiKey` |
 | Model | `--llm-model` | `FLUID_LLM_MODEL` | `diagnose.llm.model` |
 
-When an endpoint is configured, LLM analysis runs by default. Use `--llm-skip` to write `context.json` and `prompt.txt` only.
+LLM analysis is opt-in. By default the CLI writes `context.json` and `prompt.txt` only. Pass `--llm` when an endpoint and API key are configured to also call the model and write `llm-analysis.txt`.
 
 ### Run with LLM analysis
 
 ```bash
-fluid diagnose my-dataset -n default -o dir
+fluid diagnose my-dataset -n default -o dir --llm
 ```
 
 Outputs:
@@ -124,4 +124,4 @@ Markdown entries are included under **Reference FAQs (background knowledge)** in
 fluid diagnose --help
 ```
 
-Notable options include `--output-dir`, `--no-logs`, `--include-controller-logs`, `--since` (limit log/event age), `--prompt-file`, `--llm-endpoint`, `--llm-model`, and `--llm-skip`. Defaults and full descriptions are in `--help`.
+Notable options include `--output-dir`, `--no-logs`, `--include-controller-logs`, `--since` (limit log/event age), `--prompt-file`, `--llm-endpoint`, `--llm-model`, and `--llm`. Defaults and full descriptions are in `--help`.

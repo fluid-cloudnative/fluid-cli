@@ -38,7 +38,7 @@ fluid diagnose <dataset-name> [flags]
   export FLUID_LLM_API_KEY=sk-...
 
   # Collect artifacts and request LLM analysis
-  fluid diagnose my-dataset -n default -o dir
+  fluid diagnose my-dataset -n default -o dir --llm
 ```
 
 ### Options
@@ -51,7 +51,7 @@ fluid diagnose <dataset-name> [flags]
       --include-controller-logs   Also collect Fluid controller logs from fluid-system namespace
       --llm-endpoint string       LLM API base URL (overrides FLUID_LLM_ENDPOINT and ~/.fluid/config)
       --llm-model string          LLM model name (overrides FLUID_LLM_MODEL and ~/.fluid/config)
-      --llm-skip                  Skip LLM analysis (when endpoint is configured, analysis runs by default)
+      --llm                       Run LLM analysis when endpoint and API key are configured
       --no-logs                   Skip collecting pod logs (useful in large clusters)
   -o, --output string             Output mode: tui|dir|stdout (default "tui")
       --output-dir string         Directory to write artifacts (default: fluid-diagnose-<dataset>-<timestamp>)
