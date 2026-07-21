@@ -49,9 +49,9 @@ fluid diagnose <dataset-name> [flags]
       --faq-skip                  Skip known-issue FAQ matching in AI context and prompts
   -h, --help                      help for diagnose
       --include-controller-logs   Also collect Fluid controller logs from fluid-system namespace
+      --llm                       Run LLM analysis when endpoint and API key are configured
       --llm-endpoint string       LLM API base URL (overrides FLUID_LLM_ENDPOINT and ~/.fluid/config)
       --llm-model string          LLM model name (overrides FLUID_LLM_MODEL and ~/.fluid/config)
-      --llm                       Run LLM analysis when endpoint and API key are configured
       --no-logs                   Skip collecting pod logs (useful in large clusters)
   -o, --output string             Output mode: tui|dir|stdout (default "tui")
       --output-dir string         Directory to write artifacts (default: fluid-diagnose-<dataset>-<timestamp>)
