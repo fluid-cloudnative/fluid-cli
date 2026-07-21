@@ -100,6 +100,13 @@ func NewRunner(c client.Client, kubeClient kubernetes.Interface) *Runner {
 	}
 }
 
+func progress(w io.Writer, format string, args ...any) {
+	if w == nil {
+		return
+	}
+	fmt.Fprintf(w, "diagnose: "+format+"\n", args...)
+}
+
 func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 	if opts.DatasetName == "" {
 		return nil, fmt.Errorf("dataset name is required")
@@ -135,13 +142,16 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 		Generated: r.nowFn().UTC().Format(time.RFC3339),
 	}
 
+	progress(opts.Stderr, "Start collecting dataset %s/%s...", opts.Namespace, opts.DatasetName)
 	dataset := &fluidv1alpha1.Dataset{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: opts.DatasetName, Namespace: opts.Namespace}, dataset); err != nil {
 		return nil, fmt.Errorf("getting dataset %q in namespace %q: %w", opts.DatasetName, opts.Namespace, err)
 	}
 	r.writeYAML(baseDir, "dataset.yaml", dataset, m)
 	r.writeText(baseDir, "dataset.describe.txt", describeDataset(dataset), m)
+	progress(opts.Stderr, "Dataset information collected.")
 
+	progress(opts.Stderr, "Start collecting runtime information...")
 	var runtimeObjs []*unstructured.Unstructured
 	for _, rt := range dataset.Status.Runtimes {
 		runtimeNS := rt.Namespace
@@ -167,13 +177,17 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 		r.writeText(baseDir, rtPathPrefix+".describe.txt", describeUnstructuredRuntime(u), m)
 		runtimeObjs = append(runtimeObjs, u.DeepCopy())
 	}
+	progress(opts.Stderr, "Runtime information collected.")
 
+	progress(opts.Stderr, "Start discovering associated resources...")
 	inspector := inspect.New(r.client)
 	report, err := inspector.Run(ctx, opts.DatasetName, opts.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("discovering associated resources: %w", err)
 	}
+	progress(opts.Stderr, "Associated resources discovered.")
 
+	progress(opts.Stderr, "Start collecting pod and storage information...")
 	seenPods := map[string]struct{}{}
 	seenPVCs := map[string]struct{}{}
 	seenPVs := map[string]struct{}{}
@@ -219,12 +233,19 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 		seenPVs[canonicalPVName] = struct{}{}
 		r.collectPV(ctx, baseDir, canonicalPVName, m)
 	}
+	progress(opts.Stderr, "Pod and storage information collected.")
 
+	progress(opts.Stderr, "Start collecting events...")
 	collectedEvents := r.collectEvents(ctx, baseDir, opts, m)
+	progress(opts.Stderr, "Events collected.")
+
 	if opts.IncludeControllerLogs && !opts.NoLogs {
+		progress(opts.Stderr, "Start collecting controller logs...")
 		r.collectControllerLogs(ctx, baseDir, opts, m)
+		progress(opts.Stderr, "Controller logs collected.")
 	}
 
+	progress(opts.Stderr, "Start writing summary and manifest...")
 	summary := buildSummary(dataset, report, m)
 	r.writeText(baseDir, "summary.txt", summary, m)
 
@@ -243,6 +264,7 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := os.WriteFile(filepath.Join(baseDir, "manifest.json"), manifestBytes, 0o644); err != nil {
 		return nil, fmt.Errorf("writing manifest: %w", err)
 	}
+	progress(opts.Stderr, "Summary and manifest written.")
 
 	aiPaths, err := writeAIOutputs(ctx, baseDir, BuildContextInput{
 		GeneratedAt: r.nowFn(),
@@ -267,11 +289,13 @@ func (r *Runner) Run(ctx context.Context, opts Options) (*Result, error) {
 		LLMAnalysisPath:     aiPaths.AnalysisPath,
 	}
 	if opts.Archive {
+		progress(opts.Stderr, "Start creating archive...")
 		archivePath := baseDir + ".tar.gz"
 		if err := tarGzDir(baseDir, archivePath); err != nil {
 			return nil, fmt.Errorf("creating archive: %w", err)
 		}
 		result.ArchivePath = archivePath
+		progress(opts.Stderr, "Archive created.")
 	}
 	return result, nil
 }

@@ -37,6 +37,7 @@ type aiOutputPaths struct {
 
 // writeAIOutputs builds DiagnosticContext and writes context.json, prompt, and optional LLM analysis.
 func writeAIOutputs(ctx context.Context, baseDir string, in BuildContextInput, opts Options, stderr io.Writer) (aiOutputPaths, error) {
+	progress(stderr, "Start building diagnostic context and prompt...")
 	diagCtx, err := BuildContext(in)
 	if err != nil {
 		return aiOutputPaths{}, err
@@ -71,10 +72,21 @@ func writeAIOutputs(ctx context.Context, baseDir string, in BuildContextInput, o
 			paths.PromptPath = extraPrompt
 		}
 	}
+	progress(stderr, "Diagnostic context and prompt written.")
 
 	if opts.LLMSkip || strings.TrimSpace(opts.LLMEndpoint) == "" {
 		return paths, nil
 	}
+
+	datasetRef := opts.DatasetName
+	if opts.Namespace != "" && opts.DatasetName != "" {
+		datasetRef = opts.Namespace + "/" + opts.DatasetName
+	}
+	modelName := strings.TrimSpace(opts.LLMModel)
+	if modelName == "" {
+		modelName = "default"
+	}
+	progress(stderr, "Start analyzing dataset %s with %s...", datasetRef, modelName)
 
 	client := NewLLMClient(opts.LLMEndpoint, opts.LLMSkip)
 	analysis, err := client.Diagnose(ctx, LLMRequest{
@@ -98,10 +110,7 @@ func writeAIOutputs(ctx context.Context, baseDir string, in BuildContextInput, o
 		return paths, fmt.Errorf("writing LLM analysis: %w", err)
 	}
 	paths.AnalysisPath = analysisPath
-
-	if stderr != nil {
-		fmt.Fprintf(stderr, "diagnose: LLM analysis written to %s\n", analysisPath)
-	}
+	progress(stderr, "Analyze done. LLM analysis written to %s", analysisPath)
 
 	return paths, nil
 }
