@@ -30,6 +30,8 @@ func FormatPrompt(ctx *DiagnosticContext) string {
 	fmt.Fprintf(&b, "Version: %s\n", ctx.Version)
 	fmt.Fprintf(&b, "GeneratedAt: %s\n\n", ctx.GeneratedAt)
 	writeModelInstructions(&b)
+	writeFAQSection(&b, ctx.MatchedFAQs)
+	writeReferenceFAQSection(&b, ctx.ReferenceFAQs)
 	writeDatasetSection(&b, ctx.Dataset)
 	writeRuntimeSection(&b, ctx.Runtimes)
 	writePodSection(&b, ctx.Pods)
@@ -42,11 +44,64 @@ func ContextAsJSON(ctx *DiagnosticContext) ([]byte, error) {
 	return json.MarshalIndent(ctx, "", "  ")
 }
 
+const modelInstructionsText = `- Focus on diagnosis only: unhealthy signals, evidence correlation, ranked hypotheses, and uncertainties.
+- When Matched FAQs are present, compare cluster evidence to those known Fluid issue patterns and say which apply or conflict.
+- When Reference FAQs are present, use them as background knowledge only; do not claim they matched unless evidence supports it.
+- Do not provide remediation instructions, shell commands, or kubectl/helm operations.
+- If data is insufficient, state what additional observations would increase confidence.`
+
 func writeModelInstructions(b *strings.Builder) {
 	b.WriteString("## Instructions\n")
-	b.WriteString("- Focus on diagnosis only: unhealthy signals, evidence correlation, ranked hypotheses, and uncertainties.\n")
-	b.WriteString("- Do not provide remediation instructions, shell commands, or kubectl/helm operations.\n")
-	b.WriteString("- If data is insufficient, state what additional observations would increase confidence.\n\n")
+	b.WriteString(modelInstructionsText)
+	b.WriteString("\n\n")
+}
+
+func writeFAQSection(b *strings.Builder, faqs []FAQMatchContext) {
+	b.WriteString("## Matched FAQs (known Fluid issue patterns)\n")
+	if len(faqs) == 0 {
+		b.WriteString("- None matched by rule engine for this snapshot.\n\n")
+		return
+	}
+	for _, faq := range faqs {
+		fmt.Fprintf(b, "- [%s] %s (%s, confidence=%s)\n", faq.ID, faq.Title, faq.Category, faq.Confidence)
+		fmt.Fprintf(b, "  Symptom: %s\n", faq.Symptom)
+		fmt.Fprintf(b, "  Likely cause: %s\n", faq.LikelyCause)
+		fmt.Fprintf(b, "  Verify: %s\n", faq.WhatToVerify)
+	}
+	b.WriteString("\n")
+}
+
+func writeReferenceFAQSection(b *strings.Builder, faqs []FAQReferenceContext) {
+	if len(faqs) == 0 {
+		return
+	}
+	b.WriteString("## Reference FAQs (background knowledge)\n")
+	for _, faq := range faqs {
+		fmt.Fprintf(b, "- [%s] %s\n", faq.ID, faq.Title)
+		if faq.Answer != "" {
+			fmt.Fprintf(b, "  Answer: %s\n", strings.ReplaceAll(faq.Answer, "\n", "\n  "))
+		}
+	}
+	b.WriteString("\n")
+}
+
+// SplitPromptForChat separates system instructions from user diagnostic content.
+func SplitPromptForChat(prompt string) (system string, user string) {
+	system = "You are a Kubernetes and Fluid storage expert assisting with dataset diagnosis.\n\n" + modelInstructionsText
+	marker := "## Instructions"
+	if idx := strings.Index(prompt, marker); idx >= 0 {
+		rest := prompt[idx+len(marker):]
+		if nl := strings.Index(rest, "\n"); nl >= 0 {
+			rest = strings.TrimLeft(rest[nl:], "\n")
+		}
+		user = strings.TrimSpace(rest)
+	} else {
+		user = strings.TrimSpace(prompt)
+	}
+	if user == "" {
+		user = prompt
+	}
+	return system, user
 }
 
 func writeDatasetSection(b *strings.Builder, ds DatasetContext) {

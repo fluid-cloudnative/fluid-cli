@@ -22,6 +22,7 @@ fluid diagnose my-dataset -n default --archive
 |---------|-------------|
 | `fluid inspect` | List Pods, Runtimes, PVCs, and related resources for a Dataset |
 | `fluid diagnose` | Collect a support bundle (YAML, logs, events) for a Dataset |
+| `fluid diagnose config` | Manage AI/LLM settings for diagnose (`~/.fluid/config`) |
 | `fluid version` | Print CLI version |
 
 For flags and examples, use `--help` on any command:
@@ -30,6 +31,23 @@ For flags and examples, use `--help` on any command:
 fluid inspect --help
 fluid diagnose --help
 ```
+
+## AI-assisted diagnosis
+
+`fluid diagnose` can call an OpenAI-compatible LLM API to analyze collected cluster context, or export prompt files for manual copy/paste.
+
+```bash
+# Interactive setup (Bubble Tea form)
+fluid diagnose config
+
+# Or set values via CLI / env
+export FLUID_LLM_API_KEY=sk-...
+fluid diagnose my-dataset -n default -o dir
+```
+
+Artifact directory includes `context.json` and `prompt.txt` by default. Pass `--llm` to also write `llm-analysis.txt` when an endpoint and API key are configured.
+
+See [Diagnose guide](docs/guides/diagnose.md) for details.
 
 ## Documentation
 

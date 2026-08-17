@@ -36,13 +36,15 @@ const (
 // DiagnosticContext is a stable, JSON-serializable data shape for AI-assisted diagnosis.
 // It intentionally keeps only key fields to avoid sending excessive cluster payloads.
 type DiagnosticContext struct {
-	Version     string           `json:"version"`
-	GeneratedAt string           `json:"generatedAt"`
-	Dataset     DatasetContext   `json:"dataset"`
-	Runtimes    []RuntimeContext `json:"runtimes"`
-	Pods        []PodContext     `json:"pods"`
-	Events      []EventContext   `json:"events"`
-	Summary     SummaryContext   `json:"summary"`
+	Version       string                `json:"version"`
+	GeneratedAt   string                `json:"generatedAt"`
+	Dataset       DatasetContext        `json:"dataset"`
+	Runtimes      []RuntimeContext      `json:"runtimes"`
+	Pods          []PodContext          `json:"pods"`
+	Events        []EventContext        `json:"events"`
+	Summary       SummaryContext        `json:"summary"`
+	MatchedFAQs   []FAQMatchContext     `json:"matchedFAQs,omitempty"`
+	ReferenceFAQs []FAQReferenceContext `json:"referenceFAQs,omitempty"`
 }
 
 type DatasetContext struct {
@@ -115,9 +117,10 @@ type BuildContextInput struct {
 	Events      []corev1.Event
 	NoLogs      bool
 	Since       string
+	FAQ         FAQOptions
 }
 
-func BuildContext(in BuildContextInput) *DiagnosticContext {
+func BuildContext(in BuildContextInput) (*DiagnosticContext, error) {
 	ctx := &DiagnosticContext{
 		Version:     defaultPromptVersion,
 		GeneratedAt: in.GeneratedAt.UTC().Format(time.RFC3339),
@@ -146,7 +149,10 @@ func BuildContext(in BuildContextInput) *DiagnosticContext {
 		ctx.Summary.Notes = append(ctx.Summary.Notes, "No associated runtime resources were discovered.")
 	}
 
-	return ctx
+	if err := attachFAQMatches(ctx, in.FAQ); err != nil {
+		return nil, err
+	}
+	return ctx, nil
 }
 
 func (c *DiagnosticContext) MarshalJSON() ([]byte, error) {
