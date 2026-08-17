@@ -124,7 +124,7 @@ jobs:
           ( cd artifacts && sha256sum fluid_*.tar.gz > checksums.txt )
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: Fluid CLI ${{ steps.meta.outputs.tag }}
